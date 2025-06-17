@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-#yo_2
+#yo_2 #hello first commit vhs
 def compute_K0_block(L, t, U):
     K_index = 0
     momenta = 2 * np.pi * np.arange(L) / L  # Allowed momenta
