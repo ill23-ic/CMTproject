@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 
 
 def build_sierpinski(G):
+    """
+    Self similarity in all 3 base nodes, G is number of generations, base is 1, not 0.
+    Interactions occur within nearest neighbour within the same zoomed in triangle. Inaccurate for low G.
+    """
     # Level-0: Base triangle (3 nodes)
     nodes = [(0, 0), (1, 0), (0.5, np.sqrt(3)/2)]
     edges = [(0, 1), (1, 2), (2, 0)]
@@ -39,3 +43,38 @@ def build_sierpinski(G):
     
     return nodes, edges
 
+def tight_binding_sierpinski(G, t=1.0):
+    """
+    Code basically performs
+
+    H[rows[i],cols[i]]=vals[i] for i in range (len(vals))
+
+    implicitly
+    """
+    nodes, edges = build_sierpinski(G)  # Uses the corrected fractal generator
+    N = len(nodes)
+    rows, cols, vals = [], [], []
+    for i, j in edges:
+        rows += [i, j]; cols += [j, i]; vals += [-t, -t]  # Hopping terms
+    H = sp.coo_matrix((vals, (rows, cols)), shape=(N, N)).tocsr()
+    return H, nodes
+
+def plot_tb_sierpinski(G, t=1.0, k=6):
+    H, nodes = tight_binding_sierpinski(G, t)
+    eigvals, eigvecs = eigsh(H, k=k, which='SA')  # Smallest-algebraic eigenvalues
+    nodes = np.array(nodes)  # Convert to NumPy array
+    
+    # Plot eigenstates
+    figs = []
+    for i in range(k):
+        psi = eigvecs[:, i]  # Eigenstate i
+        fig, ax = plt.subplots(figsize=(6, 6))
+        sc = ax.scatter(nodes[:, 0], nodes[:, 1], c=np.abs(psi)**2, 
+                        cmap='viridis', s=100)
+        ax.set_title(f"Gen {G}, State {i}, E={eigvals[i]:.3f}")
+        plt.colorbar(sc, ax=ax, label='Probability')
+        figs.append(fig)
+    plt.show()
+    return eigvals, figs
+
+eigvals, figs = plot_tb_sierpinski(G=5, k=3)
