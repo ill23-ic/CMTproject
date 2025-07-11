@@ -136,6 +136,6 @@ def plot_tb_sierpinski_3d(G, t=1.0, k=6):
 
 # Implementation
 
-#eigvals, figs = plot_tb_sierpinski_3d(G=3, k=1)
+eigvals, figs = plot_tb_sierpinski_3d(G=3, k=1)
 
-eigvals, figs = plot_tb_sierpinski(G=5, k=3)
+#eigvals, figs = plot_tb_sierpinski(G=5, k=3)

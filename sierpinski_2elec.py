@@ -15,38 +15,48 @@ def build_sierpinski_2(G):
         new_nodes = []
         new_edges = []
         
-        # Generate 3 scaled/offset copies of the current structure
+        # Generate 3 scaled/offset copies
         for i, offset in enumerate([(0, 0), (0.5, 0), (0.25, np.sqrt(3)/4)]):
             # Scale and shift nodes
             shifted_nodes = [(x/2 + offset[0], y/2 + offset[1]) 
-                           for (x, y) in nodes[:N_prev]]
+                           for (x, y) in nodes]
             new_nodes.extend(shifted_nodes)
             
             # Reindex edges with offset
             edge_offset = i * N_prev
             new_edges.extend([(u + edge_offset, v + edge_offset) 
-                            for (u, v) in edges[:N_prev]])
+                            for (u, v) in edges])
         
-        # Merge duplicate nodes (round coordinates to avoid floating-point errors)
-        unique_nodes = {}
-        node_mapping = {}  # old index → new index
-        for idx, (x, y) in enumerate(new_nodes):
-            # Round to 10 decimal places to handle floating-point precision
+        # Deduplicate nodes and build mapping
+        coord_to_index = {}
+        dedup_nodes = []
+        old_to_new = {}  # Old index → new index
+        
+        for old_idx, (x, y) in enumerate(new_nodes):
             key = (round(x, 10), round(y, 10))
-            if key not in unique_nodes:
-                unique_nodes[key] = (x, y)
-            node_mapping[idx] = len(unique_nodes) - 1  # New index
+            if key not in coord_to_index:
+                coord_to_index[key] = len(dedup_nodes)
+                dedup_nodes.append((x, y))
+            old_to_new[old_idx] = coord_to_index[key]
         
-        # Reindex edges to use merged nodes
-        merged_edges = set()
+        # Rebuild edges using new indices
+        dedup_edges = set()
         for u, v in new_edges:
-            new_u, new_v = node_mapping[u], node_mapping[v]
-            if new_u != new_v:  # Avoid self-loops
-                merged_edges.add((min(new_u, new_v), max(new_u, new_v)))
+            new_u, new_v = old_to_new[u], old_to_new[v]
+            if new_u != new_v:  # Remove self-loops
+                dedup_edges.add(tuple(sorted((new_u, new_v))))  # Ensure unique representation
         
-        # Update nodes and edges
-        nodes = list(unique_nodes.values())
-        edges = list(merged_edges)
+        # Verify edges are nearest-neighbors
+        final_edges = []
+        node_array = np.array(dedup_nodes)
+        for u, v in dedup_edges:
+            dist = np.linalg.norm(node_array[u] - node_array[v])
+            expected_dist = 1.0/(2**g)  # Scaled nearest-neighbor distance
+            if np.isclose(dist, expected_dist, atol=1e-5):
+                final_edges.append((u, v))
+        
+        nodes = dedup_nodes
+        edges = final_edges
     
     return nodes, edges
 
@@ -120,3 +130,5 @@ def plot_tb_sierpinski_2(G, t=1.0, k=6):
     plt.tight_layout()
     plt.show()
     return eigvals, figs
+
+eigvals, figs = plot_tb_sierpinski_2(G=2, k=1)
