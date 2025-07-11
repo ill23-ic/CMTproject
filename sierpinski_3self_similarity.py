@@ -57,10 +57,10 @@ def tight_binding_sierpinski(G, t=1.0):
     for i, j in edges:
         rows += [i, j]; cols += [j, i]; vals += [-t, -t]  # Hopping terms
     H = sp.coo_matrix((vals, (rows, cols)), shape=(N, N)).tocsr()
-    return H, nodes
+    return H, nodes, edges
 
 def plot_tb_sierpinski(G, t=1.0, k=6):
-    H, nodes = tight_binding_sierpinski(G, t)
+    H, nodes, edges = tight_binding_sierpinski(G, t)
     eigvals, eigvecs = eigsh(H, k=k, which='SA')  # Smallest-algebraic eigenvalues
     nodes = np.array(nodes)  # Convert to NumPy array
     
@@ -77,4 +77,4 @@ def plot_tb_sierpinski(G, t=1.0, k=6):
     plt.show()
     return eigvals, figs
 
-eigvals, figs = plot_tb_sierpinski(G=5, k=3)
+# eigvals, figs = plot_tb_sierpinski(G=5, k=3)
