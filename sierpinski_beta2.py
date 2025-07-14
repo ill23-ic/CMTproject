@@ -5,62 +5,46 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 
-def build_sierpinski_2(G):
-    # Level-0: Base triangle
+def build_sierpinski(G):
+    """
+    Self similarity in all 3 base nodes, G is number of generations, base is 1, not 0.
+    Interactions occur within nearest neighbour within the same zoomed in triangle. Inaccurate for low G.
+    """
+    # Level-0: Base triangle (3 nodes)
     nodes = [(0, 0), (1, 0), (0.5, np.sqrt(3)/2)]
     edges = [(0, 1), (1, 2), (2, 0)]
     
     for g in range(1, G):
-        N_prev = len(nodes)
+        N_prev = len(nodes)  # Nodes before this generation
         new_nodes = []
         new_edges = []
         
-        # Generate 3 scaled/offset copies
-        for i, offset in enumerate([(0, 0), (0.5, 0), (0.25, np.sqrt(3)/4)]):
-            # Scale and shift nodes
+        # Three copies of the previous generation
+        for i in range(3):
+            # Calculate offset for this copy
+            if i == 0:
+                offset = (0, 0)  # Bottom-left
+            elif i == 1:
+                offset = (0.5, 0)  # Bottom-right
+            else:
+                offset = (0.25, np.sqrt(3)/4)  # Top-center
+            
+            # Scale and shift previous nodes
             shifted_nodes = [(x/2 + offset[0], y/2 + offset[1]) 
-                           for (x, y) in nodes]
+                           for (x, y) in nodes[:N_prev]]
             new_nodes.extend(shifted_nodes)
             
-            # Reindex edges with offset
+            # Replicate edges with index offset
             edge_offset = i * N_prev
             new_edges.extend([(u + edge_offset, v + edge_offset) 
-                            for (u, v) in edges])
+                             for (u, v) in edges[:N_prev]])
         
-        # Deduplicate nodes and build mapping
-        coord_to_index = {}
-        dedup_nodes = []
-        old_to_new = {}  # Old index → new index
-        
-        for old_idx, (x, y) in enumerate(new_nodes):
-            key = (round(x, 10), round(y, 10))
-            if key not in coord_to_index:
-                coord_to_index[key] = len(dedup_nodes)
-                dedup_nodes.append((x, y))
-            old_to_new[old_idx] = coord_to_index[key]
-        
-        # Rebuild edges using new indices
-        dedup_edges = set()
-        for u, v in new_edges:
-            new_u, new_v = old_to_new[u], old_to_new[v]
-            if new_u != new_v:  # Remove self-loops
-                dedup_edges.add(tuple(sorted((new_u, new_v))))  # Ensure unique representation
-        
-        # Verify edges are nearest-neighbors
-        final_edges = []
-        node_array = np.array(dedup_nodes)
-        for u, v in dedup_edges:
-            dist = np.linalg.norm(node_array[u] - node_array[v])
-            expected_dist = 1.0/(2**g)  # Scaled nearest-neighbor distance
-            if np.isclose(dist, expected_dist, atol=1e-5):
-                final_edges.append((u, v))
-        
-        nodes = dedup_nodes
-        edges = final_edges
+        nodes = new_nodes  # Update nodes
+        edges = new_edges  # Update edges
     
     return nodes, edges
 
-def tight_binding_sierpinski_2(G, t=1.0):
+def tight_binding_sierpinski(G, t=1.0):
     """
     Code basically performs
 
@@ -68,7 +52,7 @@ def tight_binding_sierpinski_2(G, t=1.0):
 
     implicitly
     """
-    nodes, edges = build_sierpinski_2(G)  # Uses the corrected fractal generator
+    nodes, edges = build_sierpinski(G)  # Uses the corrected fractal generator
     N = len(nodes)
     rows, cols, vals = [], [], []
     for i, j in edges:
@@ -76,8 +60,26 @@ def tight_binding_sierpinski_2(G, t=1.0):
     H = sp.coo_matrix((vals, (rows, cols)), shape=(N, N)).tocsr()
     return H, nodes, edges
 
-def plot_tb_sierpinski_2(G, t=1.0, k=6):
-    H, nodes, edges = tight_binding_sierpinski_2(G, t)
+def plot_tb_sierpinski(G, t=1.0, k=6):
+    H, nodes, edges = tight_binding_sierpinski(G, t)
+    eigvals, eigvecs = eigsh(H, k=k, which='SA')  # Smallest-algebraic eigenvalues
+    nodes = np.array(nodes)  # Convert to NumPy array
+    
+    # Plot eigenstates
+    figs = []
+    for i in range(k):
+        psi = eigvecs[:, i]  # Eigenstate i
+        fig, ax = plt.subplots(figsize=(6, 6))
+        sc = ax.scatter(nodes[:, 0], nodes[:, 1], c=np.abs(psi)**2, 
+                        cmap='viridis', s=100)
+        ax.set_title(f"Gen {G}, State {i}, E={eigvals[i]:.3f}")
+        plt.colorbar(sc, ax=ax, label='Probability')
+        figs.append(fig)
+    plt.show()
+    return eigvals, figs
+
+def plot_tb_sierpinski_3d(G, t=1.0, k=6):
+    H, nodes, edges = tight_binding_sierpinski(G, t)
     eigvals, eigvecs = eigsh(H, k=k, which='SA')
     nodes = np.array(nodes)  # Shape: (N, 2)
     
@@ -131,4 +133,9 @@ def plot_tb_sierpinski_2(G, t=1.0, k=6):
     plt.show()
     return eigvals, figs
 
-eigvals, figs = plot_tb_sierpinski_2(G=6, k=1)
+
+# Implementation
+
+eigvals, figs = plot_tb_sierpinski_3d(G=3, k=1)
+
+#eigvals, figs = plot_tb_sierpinski(G=5, k=3)
