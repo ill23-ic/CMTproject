@@ -30,8 +30,8 @@ class FractalHubbard2P:
             single_hop[v, u] = -self.t
         
         # Two-particle kinetic term
-        I = sparse.eye(self.N)
-        H_kin = sparse.kron(single_hop, I) + sparse.kron(I, single_hop)
+        Id = sparse.eye(self.N)
+        H_kin = sparse.kron(single_hop, Id) + sparse.kron(Id, single_hop)
         
         # On-site interaction (U only when both electrons are on same site)
         H_int = sparse.diags([self.U if i == j else 0 
@@ -125,9 +125,9 @@ class FractalHubbard2P:
     
 
 # Strong interaction case
-sim = FractalHubbard2P(G=5, t=1.0, U=5.0)
-fig = sim.plot_ground_state_fast()  # Ground state
-plt.show()
+#sim = FractalHubbard2P(G=5, t=1.0, U=5.0)
+#fig = sim.plot_ground_state_fast()  # Ground state
+#plt.show()
 
 # Compare to weak interaction
 #sim_weak = FractalHubbard2P(G=5, t=1.0, U=0.1)

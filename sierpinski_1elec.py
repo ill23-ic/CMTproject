@@ -2,7 +2,6 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.sparse.linalg import eigsh
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 
 def build_sierpinski_2(G):
@@ -72,7 +71,9 @@ def tight_binding_sierpinski_2(G, t=1.0):
     N = len(nodes)
     rows, cols, vals = [], [], []
     for i, j in edges:
-        rows += [i, j]; cols += [j, i]; vals += [-t, -t]  # Hopping terms
+        rows += [i, j]
+        cols += [j, i]
+        vals += [-t, -t]  # Hopping terms
     H = sp.coo_matrix((vals, (rows, cols)), shape=(N, N)).tocsr()
     return H, nodes, edges
 
@@ -131,4 +132,4 @@ def plot_tb_sierpinski_2(G, t=1.0, k=6):
     plt.show()
     return eigvals, figs
 
-#eigvals, figs = plot_tb_sierpinski_2(G=6, k=1)
+eigvals, figs = plot_tb_sierpinski_2(G=4, k=1)
