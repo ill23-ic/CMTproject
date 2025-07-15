@@ -1,0 +1,248 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from scipy.sparse import diags, kron, identity, csc_matrix
+from scipy.sparse.linalg import eigsh, expm_multiply
+
+class Hubbard1DTwoParticles:
+    def __init__(self, L, t=1, U=0.01, periodic=True):
+        """
+        Initialize 1D Hubbard model for two particles with opposite spins
+        
+        Parameters:
+        L : int - number of lattice sites
+        t : float - hopping amplitude
+        U : float - on-site interaction strength
+        periodic : bool - whether to use periodic boundary conditions
+        """
+        self.L = L
+        self.t = t
+        self.U = U
+        self.periodic = periodic
+        self.hamiltonian = self._build_hamiltonian()
+        self.position_basis = self._generate_position_basis()
+        
+    def _build_hamiltonian(self):
+        """Construct the Hamiltonian matrix in position basis"""
+        # Single-particle hopping term
+        single_hop = diags([-self.t * np.ones(self.L - 1)], [-1]) + \
+                     diags([-self.t * np.ones(self.L - 1)], [1])
+        if self.periodic:
+            single_hop += diags([-self.t], [self.L - 1]) + \
+                          diags([-self.t], [-self.L + 1])
+        single_hop = single_hop.tocsc()
+        
+        # Identity matrix
+        I = identity(self.L, format='csc')
+        
+        # Two-particle Hamiltonian: H = H_hop ⊗ I + I ⊗ H_hop + U sum_i n_{i,up} n_{i,down}
+        H_hop = kron(single_hop, I) + kron(I, single_hop)
+        
+        # On-site interaction term
+        interaction = csc_matrix((self.L**2, self.L**2))
+        for i in range(self.L):
+            interaction[i*self.L + i, i*self.L + i] = self.U
+            
+        return H_hop + interaction
+    
+    def _generate_position_basis(self):
+        """Generate position basis states |x1,x2>"""
+        return [(x1, x2) for x1 in range(self.L) for x2 in range(self.L)]
+    
+    def diagonalize(self, k=6):
+        """Diagonalize the Hamiltonian"""
+        self.eigenvalues, self.eigenvectors = eigsh(self.hamiltonian, k=k, which='SA')
+        return self.eigenvalues, self.eigenvectors
+    
+    def time_evolve(self, initial_state, dt, steps):
+        """
+        Time evolve an initial state
+        
+        Parameters:
+        initial_state : array - initial wavefunction
+        dt : float - time step
+        steps : int - number of time steps
+        
+        Returns:
+        List of states at each time step
+        """
+        if not hasattr(self, 'hamiltonian'):
+            self.hamiltonian = self._build_hamiltonian()
+            
+        states = [initial_state]
+        for _ in range(steps-1):
+            # Use sparse matrix exponential for efficient time evolution
+            new_state = expm_multiply(-1j*dt*self.hamiltonian, states[-1])
+            states.append(new_state)
+        return states
+    
+    def plot_probability_density(self, state, ax=None):
+        """Plot the probability density |ψ(x1,x2)|²"""
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8,6))
+            
+        prob_density = np.abs(state.reshape(self.L, self.L))**2
+        
+        im = ax.imshow(prob_density, origin='lower', 
+                      extent=[0, self.L, 0, self.L],
+                      cmap='viridis')
+        ax.set_xlabel('Position x1 (up electron)')
+        ax.set_ylabel('Position x2 (down electron)')
+        ax.set_title('Two-particle probability density')
+        plt.colorbar(im, ax=ax, label='Probability')
+        
+        return ax
+    
+    def animate_time_evolution(self, initial_state, dt, steps, interval=100):
+        states = self.time_evolve(initial_state, dt, steps)
+        
+        fig, (ax_joint, ax_marginal) = plt.subplots(1, 2, figsize=(12, 6))
+        # Joint density plot
+        prob0 = np.abs(states[0].reshape(self.L, self.L))**2
+        im = ax_joint.imshow(prob0, origin='lower',
+                             extent=[0, self.L, 0, self.L],
+                             cmap='viridis', vmin=0, vmax=prob0.max())
+        fig.colorbar(im, ax=ax_joint, label='Probability')
+        ax_joint.set_title('Joint |ψ|²')
+        ax_joint.set_xlabel('x2 (down)')
+        ax_joint.set_ylabel('x1 (up)')
+        
+        # Marginal bar plots
+        sites = np.arange(self.L)
+        prob_up = prob0.sum(axis=1)
+        prob_dn = prob0.sum(axis=0)
+        bars_up = ax_marginal.bar(sites - 0.2, prob_up, width=0.4, label='Up')
+        bars_dn = ax_marginal.bar(sites + 0.2, prob_dn, width=0.4, label='Down')
+        ax_marginal.set_xlabel('Site')
+        ax_marginal.set_ylabel('Probability')
+        ax_marginal.set_title('Marginals')
+        ax_marginal.set_ylim(0, 1)
+        ax_marginal.legend()
+        
+        def update(frame):
+            prob = np.abs(states[frame].reshape(self.L, self.L))**2
+            im.set_data(prob)
+            prob_u = prob.sum(axis=1)
+            prob_d = prob.sum(axis=0)
+            for bar, h in zip(bars_up, prob_u):
+                bar.set_height(h)
+            for bar, h in zip(bars_dn, prob_d):
+                bar.set_height(h)
+            ax_joint.set_title(f'Joint |ψ|² (t = {frame*dt:.2f})')
+            return [im, *bars_up, *bars_dn]
+        
+        ani = FuncAnimation(fig, update, frames=steps, interval=interval, blit=False)
+        plt.close()
+        return ani
+
+    def eigen(self, k=6, return_vecs=True):
+        """Returns k lowest eigenvalues/vectors"""
+        H = self.hamiltonian
+        eigvals, eigvecs = eigsh(H, k=k, which='SA')
+        eigvecs = np.asarray(eigvecs)  # Force dense conversion
+        return (eigvals, eigvecs) if return_vecs else eigvals
+
+    def plot_eigenstate(self, state_idx=0):
+        """Plot probability density of specified eigenstate"""
+        # Get enough states (minimum 6 or state_idx+1)
+        k = max(6, state_idx + 1)
+        eigvals, eigvecs = self.eigen(k=k)
+        
+        if state_idx >= eigvecs.shape[1]:
+            raise ValueError(
+                f"state_idx {state_idx} >= available states ({eigvecs.shape[1]})"
+            )
+
+        psi = eigvecs[:, state_idx].reshape(self.L, self.L)
+        prob_density = np.abs(psi)**2
+
+        # Create figure
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # 1. Marginal probabilities
+        sites = np.arange(self.L)
+        ax1.bar(sites - 0.2, np.sum(prob_density, axis=1), width=0.4, label='Up')
+        ax1.bar(sites + 0.2, np.sum(prob_density, axis=0), width=0.4, label='Down')
+        ax1.set(xlabel='Site', ylabel='Probability', 
+                title=f'State {state_idx} (E={eigvals[state_idx]:.3f})')
+        ax1.legend()
+
+        # 2. Two-particle density
+        im = ax2.imshow(prob_density, cmap='viridis', origin='lower',
+                        extent=[0, self.L, 0, self.L])
+        ax2.set(xlabel='Down pos', ylabel='Up pos', 
+                title='Joint Probability')
+        plt.colorbar(im, ax=ax2)
+
+        plt.tight_layout()
+        return fig
+    
+def plot_states(L, U, t, states_to_plot):
+    system = Hubbard1DTwoParticles(L=L, U=U, t=t)
+    
+    # Plot requested states
+    figs = []
+    for k in range(states_to_plot):
+        fig = system.plot_eigenstate(k)
+        fig.suptitle(f'L={L}, U={U}, State {k}', y=1.05)
+        figs.append(fig)
+    
+    plt.show()
+    return figs
+
+if __name__ == "__main__":
+    # Initialize system
+    L = 10
+    t = 1.0
+    U = -3.0
+    hubbard = Hubbard1DTwoParticles(L, t, U)
+    
+    #plots stationary states for these argyments
+    plot_states(L=L, U=U, t=t, states_to_plot=7)
+    
+    # Diagonalize to get eigenstates
+    eigenvalues, eigenvectors = hubbard.diagonalize()
+    print("Energy eigenvalues:", eigenvalues)
+    
+    # Create initial state - can be an eigenstate or superposition
+    #initial_state = eigenvectors[:,0]  # Ground state
+    # Or a localized state:
+    initial_state = np.zeros(L**2)
+    initial_state[5*L + 5] = 1.0  # Particle 1 at site 2, particle 2 at site 3
+    
+    # Create and display animation
+    dt = 0.1
+    steps = 50
+    ani = hubbard.animate_time_evolution(initial_state, dt, steps)
+    plt.show()
+    
+    # To save the animation (requires ffmpeg):
+    ani.save('hubbard_time_evolution.gif', writer='pillow', fps=10)
+    
+    # To display in notebook:
+    from IPython.display import HTML
+    HTML(ani.to_jshtml())
+    
+    # Sort eigenvalues and eigenvectors
+    idx_sort = np.argsort(eigenvalues)
+    eigenvalues = eigenvalues[idx_sort]
+    eigenvectors = eigenvectors[:, idx_sort]
+
+    # Calculate energy gaps
+    energy_gaps = np.diff(eigenvalues)
+    print("Energy Gaps:", energy_gaps)
+
+    # Identify dominant position states
+    for idx, vec in enumerate(eigenvectors.T):
+        prob_density = np.abs(vec)**2
+        max_index = np.argmax(prob_density)
+        x1, x2 = hubbard.position_basis[max_index]
+        print(f"Eigenvalue {eigenvalues[idx]:.3f} primarily at |x1={x1}, x2={x2}>")
+    
+    # Check for degeneracy
+        significant_indices = np.argwhere(prob_density > 0.05).flatten()
+        if len(significant_indices) > 1:
+            print(f"  Superposition of states:")
+            for i in significant_indices:
+                x1_sup, x2_sup = hubbard.position_basis[i]
+                print(f"    |x1={x1_sup}, x2={x2_sup}> with probability {prob_density[i]:.3f}")
