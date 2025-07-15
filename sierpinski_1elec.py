@@ -131,4 +131,4 @@ def plot_tb_sierpinski_2(G, t=1.0, k=6):
     plt.show()
     return eigvals, figs
 
-eigvals, figs = plot_tb_sierpinski_2(G=6, k=1)
+#eigvals, figs = plot_tb_sierpinski_2(G=6, k=1)

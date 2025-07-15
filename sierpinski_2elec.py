@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from scipy import sparse
 from scipy.sparse.linalg import eigsh
 from functools import cached_property
+from sierpinski_1elec import build_sierpinski_2
 
 class FractalHubbard2P:
     def __init__(self, G=3, t=1.0, U=0.01):
@@ -16,53 +17,8 @@ class FractalHubbard2P:
         self.G = G
         self.t = t
         self.U = U
-        self.nodes, self.edges = self.build_sierpinski(G)
+        self.nodes, self.edges = build_sierpinski_2(G)
         self.N = len(self.nodes)  # Number of sites
-
-    def build_sierpinski(self, G):
-        """Builds Sierpiński triangle lattice with deduplicated nodes"""
-        # Level-0: Base triangle
-        nodes = [(0, 0), (1, 0), (0.5, np.sqrt(3)/2)]
-        edges = [(0, 1), (1, 2), (2, 0)]
-        
-        for g in range(1, G):
-            N_prev = len(nodes)
-            new_nodes = []
-            new_edges = []
-            
-            # Generate 3 scaled/offset copies
-            for i, offset in enumerate([(0, 0), (0.5, 0), (0.25, np.sqrt(3)/4)]):
-                shifted_nodes = [(x/2 + offset[0], y/2 + offset[1]) 
-                               for (x, y) in nodes]
-                new_nodes.extend(shifted_nodes)
-                
-                edge_offset = i * N_prev
-                new_edges.extend([(u + edge_offset, v + edge_offset) 
-                                for (u, v) in edges])
-            
-            # Deduplicate nodes and reindex edges
-            coord_to_index = {}
-            dedup_nodes = []
-            old_to_new = {}
-            
-            for old_idx, (x, y) in enumerate(new_nodes):
-                key = (round(x, 10), round(y, 10))
-                if key not in coord_to_index:
-                    coord_to_index[key] = len(dedup_nodes)
-                    dedup_nodes.append((x, y))
-                old_to_new[old_idx] = coord_to_index[key]
-            
-            # Rebuild edges
-            dedup_edges = set()
-            for u, v in new_edges:
-                new_u, new_v = old_to_new[u], old_to_new[v]
-                if new_u != new_v:
-                    dedup_edges.add(tuple(sorted((new_u, new_v))))
-            
-            nodes = dedup_nodes
-            edges = list(dedup_edges)
-        
-        return nodes, edges
 
     @cached_property
     def hamiltonian(self):
@@ -93,7 +49,7 @@ class FractalHubbard2P:
 
     def plot_eigenstate(self, state_idx=0):
         """Visualizes two-electron eigenstate with full correlation information"""
-        eigvals, eigvecs = self.eigen(k=max(6, state_idx+1))
+        eigvals, eigvecs = self.eigen(k=state_idx+1)
         psi = eigvecs[:, state_idx].reshape(self.N, self.N)
         prob_density = np.abs(psi)**2
         
@@ -144,13 +100,36 @@ class FractalHubbard2P:
         plt.tight_layout()
         return fig
     
+    def plot_ground_state_fast(self):
+        """Optimized for ground-state only, for visuals. No edge plots."""
+        # Compute ONLY GS (k=1)
+        eigval, eigvec = eigsh(self.hamiltonian, k=1, which='SA')
+        psi = eigvec[:, 0].reshape(self.N, self.N)
+        prob_density = np.abs(psi)**2
+        prob = np.array(np.sum(prob_density, axis=1)).flatten()
+        
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        nodes = np.array(self.nodes)
+        
+        norm = plt.Normalize(0, prob.max())
+        colors = plt.cm.viridis(norm(prob))
+        
+        ax.bar3d(nodes[:,0], nodes[:,1], np.zeros_like(prob),
+                0.02, 0.02, prob, color=colors, edgecolor='k')
+        
+        ax.set_title(f"GS Probability Density (E={eigval[0]:.3f})")
+        fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap='viridis'),
+                    ax=ax, label='Probability')
+        return fig
+    
 
 # Strong interaction case
-sim = FractalHubbard2P(G=3, t=1.0, U=5.0)
-fig = sim.plot_eigenstate(0)  # Ground state
+sim = FractalHubbard2P(G=5, t=1.0, U=5.0)
+fig = sim.plot_ground_state_fast()  # Ground state
 plt.show()
 
 # Compare to weak interaction
-sim_weak = FractalHubbard2P(G=3, t=1.0, U=0.1)
-fig = sim_weak.plot_eigenstate(0)
-plt.show()
+#sim_weak = FractalHubbard2P(G=5, t=1.0, U=0.1)
+#fig = sim_weak.plot_eigenstate_3d(0)
+#plt.show()
