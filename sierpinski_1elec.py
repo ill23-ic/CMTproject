@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 
 
 def build_sierpinski_2(G):
+    """
+    In our convention, N(G)=1/2 (3^G + 3), shifted backwards by 1 generation compared to normal convention.
+    """
     # Level-0: Base triangle
     nodes = [(0, 0), (1, 0), (0.5, np.sqrt(3)/2)]
     edges = [(0, 1), (1, 2), (2, 0)]
@@ -132,4 +135,4 @@ def plot_tb_sierpinski_2(G, t=1.0, k=6):
     plt.show()
     return eigvals, figs
 
-eigvals, figs = plot_tb_sierpinski_2(G=4, k=1)
+#eigvals, figs = plot_tb_sierpinski_2(G=3, k=1)
